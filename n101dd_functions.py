@@ -275,8 +275,13 @@ def play_audio_concatenated_segments(recording,
                                      n_segments: int = 5,
                                      gap_duration: float = 1.0,
                                      target_fs: int = 44100,
-                                     normalize: bool = True):
-    from IPython.display import Audio
+                                     normalize: bool = True,
+                                     auto_display: bool = True):
+    """
+    Concatenate N consecutive segments with a silence gap and return an IPython Audio widget.
+    In Google Colab, set `auto_display=True` (default) so the widget is displayed immediately.
+    """
+    from IPython.display import Audio, display
 
     _assert_single_channel(recording)
     fs = float(recording.get_sampling_frequency())
@@ -287,42 +292,49 @@ def play_audio_concatenated_segments(recording,
 
     end_segment = min(start_segment + n_segments, total_segments)
 
-    seg_arrays = []
+    parts = []
     for seg in range(start_segment, end_segment):
         tr = recording.get_traces(segment_index=seg)
         x = np.asarray(tr).astype(np.float32).reshape(-1)
         if x.size > 0:
             x = x - np.mean(x, dtype=np.float64)
-        seg_arrays.append(x)
+        parts.append(x)
         if seg < end_segment - 1 and gap_duration > 0:
-            gap = np.zeros(int(round(gap_duration * fs)), dtype=np.float32)
-            seg_arrays.append(gap)
+            parts.append(np.zeros(int(round(gap_duration * fs)), dtype=np.float32))
 
-    if not seg_arrays:
-        return Audio(np.zeros(int(target_fs), dtype=np.float32), rate=target_fs)
+    x = np.concatenate(parts) if parts else np.zeros(int(target_fs * max(0.5, n_segments * 5.0)), dtype=np.float32)
 
-    x = np.concatenate(seg_arrays)
-
+    # Resample if needed
     if int(round(fs)) != int(target_fs):
         if _HAS_SCIPY:
             import math
             g = math.gcd(int(round(fs)), int(target_fs))
             up = int(target_fs // g)
             down = int(round(fs) // g)
-            x = resample_poly(x, up=up, down=down)
+            x = resample_poly(x, up=up, down=down).astype(np.float32, copy=False)
         else:
-            t_in = np.linspace(0, 1, num=x.shape[0], endpoint=False)
+            t_in = np.linspace(0, 1, num=x.shape[0], endpoint=False, dtype=np.float32)
             num_out = int(np.round(x.shape[0] * (target_fs / fs)))
-            t_out = np.linspace(0, 1, num=num_out, endpoint=False)
+            t_out = np.linspace(0, 1, num=num_out, endpoint=False, dtype=np.float32)
             x = np.interp(t_out, t_in, x).astype(np.float32)
 
-    if normalize:
-        peak = np.max(np.abs(x)) if x.size else 1.0
+    if normalize and x.size:
+        peak = float(np.max(np.abs(x)))
         if peak > 0:
             x = 0.99 * (x / peak)
+    x = np.asarray(x, dtype=np.float32).reshape(-1)
 
-    return Audio(x, rate=int(target_fs))
+    from IPython.display import Audio
+    audio = Audio(x, rate=int(target_fs))
 
+    if auto_display:
+        try:
+            from IPython.display import display
+            display(audio)
+        except Exception:
+            pass
+
+    return audio
 
 # ------------------------------
 # Spike sorting (Tridesclous) + metrics
