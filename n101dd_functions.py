@@ -915,7 +915,7 @@ def run_sorting(recording_number,
     print(f"  Unit {uid}: {hz:.3f} Hz")
 
   av_templates, unit_ids = extract_templates_via_sorting_analyzer(recording = recording, sorting = sorting)
-  plot_templates_from_array(templates = av_templates, unit_ids=unit_ids)
+  plot_templates_in_ms(templates = av_templates)
   plot_segment_with_spikes_and_threshold_mad(recording = recording, sorting=sorting,segment_index=1,detect_threshold_mad=detect_threshold,polarity='both')
   plot_raster_and_psth_per_unit(sorting=sorting,recording=recording)
 
