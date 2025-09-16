@@ -462,6 +462,7 @@ def plot_templates_from_array(templates: np.ndarray, unit_ids=None, ax: Optional
     if unit_ids is None:
         unit_ids = list(range(n_units))
 
+    # Plot each unit's template
     for i in range(n_units):
         ax.plot(t_ms, T[i], label=f"unit {unit_ids[i]}")
     ax.set_title("Unit templates (average)")
