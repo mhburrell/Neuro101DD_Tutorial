@@ -517,17 +517,6 @@ def get_data_dir():
         print(f"Using existing data at {data_dir}")
         return data_dir
 
-    # 2) try student's Drive copy (optional)
-    try:
-        from google.colab import drive  # only exists on Colab
-        drive.mount("/content/drive", force_remount=False)
-        _maybe_copy_from_drive(f"{WORKSHOP_NAME}/{DATA_FOLDER_NAME}", data_dir)
-        if data_dir.exists() and any(data_dir.iterdir()):
-            print(f"Using data copied from Drive at {data_dir}")
-            return data_dir
-    except Exception:
-        pass  # not in Colab or not mounted
-
     # 3) try shared Google Drive folder via gdown
     if GDRIVE_FOLDER_ID:
         print("Downloading data from shared Google Drive folder...")
