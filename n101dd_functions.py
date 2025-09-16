@@ -432,23 +432,40 @@ def extract_templates_via_sorting_analyzer(recording,
 
 
 def plot_templates_from_array(templates: np.ndarray, unit_ids=None, ax: Optional[plt.Axes] = None):
+    """
+    Plot templates from an array of shape (n_units, n_samples, n_channels).
+    If n_channels == 1, plots each unit as a 1D trace.
+    X axis is in milliseconds (ms) for 22 kHz sample rate.
+    """
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 4))
 
     T = templates
-    if T.ndim == 3 and T.shape[1] >= 1:
-        T = T[:, 0, :]
-    if T.ndim != 2:
-        raise ValueError(f"Unexpected template shape {templates.shape}; expected (n_units, n_samples) or (n_units, n_channels, n_samples).")
+    # (n_units, n_samples, n_channels)
+    if T.ndim == 3 and T.shape[2] == 1:
+        # Only one channel, squeeze to (n_units, n_samples)
+        T = T[:, :, 0]
+    elif T.ndim == 3:
+        # More than one channel, plot only channel 0
+        T = T[:, :, 0]
+    elif T.ndim == 2:
+        # Already (n_units, n_samples)
+        pass
+    else:
+        raise ValueError(f"Unexpected template shape {templates.shape}; expected (n_units, n_samples, n_channels) or (n_units, n_samples).")
 
     n_units = T.shape[0]
+    n_samples = T.shape[1]
+    fs = 22000.0  # 22 kHz
+    t_ms = np.arange(n_samples) / fs * 1000.0
+
     if unit_ids is None:
         unit_ids = list(range(n_units))
 
     for i in range(n_units):
-        ax.plot(T[i], label=f"unit {unit_ids[i]}")
+        ax.plot(t_ms, T[i], label=f"unit {unit_ids[i]}")
     ax.set_title("Unit templates (average)")
-    ax.set_xlabel("Samples")
+    ax.set_xlabel("Time (ms)")
     ax.set_ylabel("Amplitude")
     if n_units <= 15:
         ax.legend(loc='best')
