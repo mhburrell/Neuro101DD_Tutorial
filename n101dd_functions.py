@@ -431,6 +431,34 @@ def extract_templates_via_sorting_analyzer(recording,
     return av_templates, unit_ids
 
 
+import matplotlib.pyplot as plt
+import numpy as np
+
+def plot_templates_in_ms(av_templates, sampling_frequency=22000):
+    """
+    Plots average unit templates with the x-axis in milliseconds.
+
+    Args:
+        av_templates (np.ndarray): Array of average templates with shape (num_units, num_samples, num_channels).
+        sampling_frequency (int): The sampling frequency of the recording in Hz.
+    """
+    num_units, num_samples, num_channels = av_templates.shape
+
+    # Calculate the time axis in milliseconds
+    time_in_ms = np.arange(num_samples) / sampling_frequency * 1000
+
+    plt.figure(figsize=(10, 4))
+    for unit_index in range(num_units):
+        # Assuming you want to plot the template for the first channel if there are multiple channels
+        plt.plot(time_in_ms, av_templates[unit_index, :, 0], label=f'Unit {unit_index}')
+
+    plt.xlabel('Time (ms)')
+    plt.ylabel('Amplitude')
+    plt.title('Average Unit Templates')
+    plt.legend()
+    plt.show()
+
+
 def plot_templates_from_array(templates: np.ndarray, unit_ids=None, ax: Optional[plt.Axes] = None):
     """
     Plot templates from an array of shape (n_units, n_samples, n_channels).
