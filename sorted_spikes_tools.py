@@ -304,47 +304,124 @@ def plot_raster_psth_all(
     fig.tight_layout()
     return fig, (ax_ras, ax_psth)
 
-# -----------------------------------------------------------------------------
-# Raster + PSTH (split by situation)
-# -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # Raster + PSTH (split by situation)
+    # -----------------------------------------------------------------------------
 
-def plot_raster_psth_by_situation(
-    recording_num: int,
-    cell_num: int,
-    align_to: Literal["cue", "reward"] = "cue",
-    t_window_ms: Tuple[float, float] = (-500.0, 1500.0),
-    bin_size_ms: float = 20.0,
-    smooth_sigma_ms: float | None = None,
-    situations: Sequence[int] | None = None,
-    max_trials_per_sit: int | None = None,
-    figsize=(12, 10),
-):
-    """
-    Create a grid of rasters and PSTHs, one row per situation.
+    def plot_raster_psth_by_situation(
+        recording_num: int,
+        cell_num: int,
+        align_to: Literal["cue", "reward"] = "cue",
+        t_window_ms: Tuple[float, float] = (-500.0, 1500.0),
+        bin_size_ms: float = 20.0,
+        smooth_sigma_ms: float | None = None,
+        situations: Sequence[int] | None = None,
+        max_trials_per_sit: int | None = None,
+        figsize=(12, 10),
+    ):
+        """
+        Create a grid of rasters and PSTHs, one row per situation.
+        All PSTHs share the same y-axis scale.
 
-    Returns
-    -------
-    fig, axes_dict where axes_dict[sit] = (ax_raster, ax_psth)
-    """
-    df = load_sorted_spikes(silent=True)
-    sub = _subset_df(df, recording_num, cell_num)
-    A = _align_spikes(sub, align_to)
+        Returns
+        -------
+        fig, axes_dict where axes_dict[sit] = (ax_raster, ax_psth)
+        """
+        df = load_sorted_spikes(silent=True)
+        sub = _subset_df(df, recording_num, cell_num)
+        A = _align_spikes(sub, align_to)
 
-    lo_s, hi_s = _ms_to_s(np.array(t_window_ms))
-    bin_s = _ms_to_s(bin_size_ms)
+        lo_s, hi_s = _ms_to_s(np.array(t_window_ms))
+        bin_s = _ms_to_s(bin_size_ms)
 
-    if situations is None:
-        situations = np.unique(A.situations)
+        if situations is None:
+            situations = np.unique(A.situations)
 
-    # Setup figure
-    n_sit = len(situations)
-    fig, axs = plt.subplots(n_sit, 2, figsize=figsize, sharex=False, gridspec_kw={"height_ratios": [2]*n_sit})
-    if n_sit == 1:
-        axs = np.array([axs])
-    axes_map: Dict[int, Any] = {}
+        # Precompute PSTHs + raster rows for each situation so we can find a global y-scale
+        sit_data = []
+        edges = np.arange(lo_s, hi_s + bin_s, bin_s)
+        mids = 0.5 * (edges[:-1] + edges[1:])
 
-    for row, sit in enumerate(situations):
-        mask_sit = (A.situations == sit)
+        for sit in situations:
+            mask_sit = (A.situations == sit)
+            rel_sit = A.rel_time_s[mask_sit]
+            trial_sit = A.trials[mask_sit]
+
+            # Window for display
+            in_win = _window_mask(rel_sit, lo_s, hi_s)
+            rel_win = rel_sit[in_win]
+            trials_win = trial_sit[in_win]
+
+            # Trial order (optionally truncated)
+            uniq_trials = np.unique(trials_win)
+            if max_trials_per_sit is not None:
+                uniq_trials = uniq_trials[:max_trials_per_sit]
+
+            # Raster rows
+            trial_to_idx = {t: i for i, t in enumerate(uniq_trials)}
+            rows = [[] for _ in range(len(uniq_trials))]
+            for t, rt in zip(trials_win, rel_win):
+                if t in trial_to_idx:
+                    rows[trial_to_idx[t]].append(rt)
+            rows = [np.asarray(r, dtype=float) if len(r) else np.asarray([], dtype=float) for r in rows]
+
+            # PSTH (per-situation rate)
+            counts, _ = np.histogram(rel_win, bins=edges)
+            n_trials = max(1, len(uniq_trials))
+            rates = counts / (n_trials * bin_s)
+
+            # Optional smoothing
+            if smooth_sigma_ms is not None and smooth_sigma_ms > 0:
+                sigma_s = _ms_to_s(smooth_sigma_ms)
+                half = int(np.ceil(3 * sigma_s / bin_s))
+                if half > 0 and rates.size >= 2 * half + 1:
+                    xk = np.arange(-half, half + 1) * bin_s
+                    kernel = np.exp(-0.5 * (xk / sigma_s) ** 2)
+                    kernel /= np.sum(kernel)
+                    rates = np.convolve(rates, kernel, mode="same")
+
+            sit_data.append({"sit": int(sit), "rows": rows, "rates": rates, "uniq_trials": uniq_trials})
+
+        # determine global y-scale for PSTHs
+        max_rate = 0.0
+        for d in sit_data:
+            if d["rates"].size:
+                max_rate = max(max_rate, float(np.nanmax(d["rates"])))
+        # provide a small default upper bound if all zero
+        if max_rate <= 0:
+            max_rate = 1.0
+        ymax = max_rate * 1.05
+
+        # Setup figure
+        n_sit = len(situations)
+        fig, axs = plt.subplots(n_sit, 2, figsize=figsize, sharex=False, gridspec_kw={"height_ratios": [2]*n_sit})
+        if n_sit == 1:
+            axs = np.array([axs])
+        axes_map: Dict[int, Any] = {}
+
+        for row, d in enumerate(sit_data):
+            sit = d["sit"]
+            rows = d["rows"]
+            rates = d["rates"]
+
+            ax_ras, ax_psth = axs[row, 0], axs[row, 1]
+            ax_ras.eventplot(rows, lineoffsets=np.arange(len(rows)), linelengths=0.8, colors="k", linewidths=0.6)
+            ax_ras.set_xlim(lo_s, hi_s)
+            ax_ras.set_ylabel("Trial")
+            ax_ras.set_title(f"Situation {int(sit)} – Raster")
+
+            ax_psth.bar(mids, rates, width=bin_s, align="center", edgecolor="none")
+            ax_psth.set_xlim(lo_s, hi_s)
+            ax_psth.set_ylim(0, ymax)
+            ax_psth.set_xlabel("Time from event (s)")
+            ax_psth.set_ylabel("Rate (Hz)")
+            ax_psth.set_title(f"Situation {int(sit)} – PSTH")
+
+            axes_map[int(sit)] = (ax_ras, ax_psth)
+
+        fig.suptitle(f"Recording {recording_num} • Cell {cell_num} • Align: {align_to}", y=0.995)
+        fig.tight_layout()
+        return fig, axes_map
         rel_sit = A.rel_time_s[mask_sit]
         trial_sit = A.trials[mask_sit]
 
@@ -417,11 +494,11 @@ def count_spikes_and_hist_by_situation(
     """
     Count spikes per trial in a window after the event; histogram per situation.
 
-    Returns
-    -------
-    counts_dict : dict[int, np.ndarray]
-        Mapping situation -> per-trial spike counts (one value per trial).
-    fig
+    Notes:
+    - All histograms share the same x and y axes.
+    - Bin edges are chosen to align with whole spike-count integers (bins centered on integers).
+      The 'bins' argument is accepted for compatibility but integer-centered bins spanning the
+      observed count range are used to ensure whole-number bins.
     """
     df = load_sorted_spikes(silent=True)
     sub = _subset_df(df, recording_num, cell_num)
@@ -445,24 +522,58 @@ def count_spikes_and_hist_by_situation(
             per_trial_counts.append(int(np.sum(_window_mask(r, lo_s, hi_s))))
         counts_dict[int(sit)] = np.asarray(per_trial_counts, dtype=int)
 
-    # Plot histograms
+    # Determine integer-centered bin edges spanning all counts
+    all_vals = np.concatenate([v for v in counts_dict.values()]) if counts_dict else np.array([], dtype=int)
+    if all_vals.size == 0:
+        min_c, max_c = 0, 0
+    else:
+        min_c, max_c = int(np.min(all_vals)), int(np.max(all_vals))
+    # Create edges so that each integer count occupies one bin (centered on integers)
+    edges = np.arange(min_c - 0.5, max_c + 0.5 + 1e-9, 1.0)
+    # If there is only a single possible count value, make at least one bin
+    if edges.size == 0:
+        edges = np.array([-0.5, 0.5])
+
+    # Precompute hist heights to determine common y-limit
+    max_count_height = 0
+    hist_heights = {}
+    for sit, vals in counts_dict.items():
+        hist, _ = np.histogram(vals, bins=edges)
+        hist_heights[sit] = hist
+        if hist.size:
+            max_count_height = max(max_count_height, int(np.max(hist)))
+
+    # Setup shared axes figure
     n = len(situations)
     cols = min(4, n)
     rows = int(np.ceil(n / cols))
-    fig, axes = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
+    fig, axes = plt.subplots(rows, cols, figsize=figsize, squeeze=False, sharex=True, sharey=True)
     axes = axes.ravel()
 
     for i, sit in enumerate(situations):
         ax = axes[i]
         vals = counts_dict[int(sit)]
-        ax.hist(vals, bins=bins)
+        # Use the precomputed integer edges for plotting
+        ax.hist(vals, bins=edges, align="mid", edgecolor="black")
         ax.set_title(f"Situation {int(sit)}")
         ax.set_xlabel("Spike count")
         ax.set_ylabel("Trials")
+
+    # Turn off unused axes
     for j in range(i + 1, len(axes)):
         axes[j].axis("off")
 
-    fig.suptitle(f"Spike counts per trial • Rec {recording_num} • Cell {cell_num} • Align {align_to} • Window {window_ms} ms", y=0.995)
+    # Set common x and y limits
+    ax_min = edges[0]
+    ax_max = edges[-1]
+    for ax in axes[:n]:
+        ax.set_xlim(ax_min, ax_max)
+        ax.set_ylim(0, max(1, int(np.ceil(max_count_height * 1.05))))
+
+    fig.suptitle(
+        f"Spike counts per trial • Rec {recording_num} • Cell {cell_num} • Align {align_to} • Window {window_ms} ms",
+        y=0.995,
+    )
     fig.tight_layout()
     return counts_dict, fig
 
