@@ -129,6 +129,60 @@ def _ensure_parquet(data_dir: Path) -> Path:
         f"or set SORTED_SPIKES_ZIP_URL to a downloadable zip."
     )
 
+# --- CONFIG: set these for your workshop ---
+WORKSHOP_NAME = "data101-workshop"
+DATA_FOLDER_NAME = "data"               # where data will live locally
+GDRIVE_FOLDER_ID = ""  # Option A (leave "" to skip)
+ZIP_HTTP_URL = "https://github.com/mhburrell/Neuro101DD_Tutorial/releases/download/Week2/Data.zip"  # e.g., a GitHub Release URL to a .zip file (Option B), or leave "" to skip
+ZIP_FILENAME = "Data.zip"            # only used if ZIP_HTTP_URL is set
+GCS_HTTP_PREFIX = ""  # e.g., "https://storage.googleapis.com/your-bucket/workshop" (Option C), or leave "" to skip
+
+import os, sys, shutil, subprocess, pathlib, zipfile
+
+def get_data_dir():
+    """
+    Returns a pathlib.Path to the local data directory.
+    Strategy:
+      1) If ./data already exists, use it.
+      2) Else try copying from student's Google Drive at MyDrive/{WORKSHOP_NAME}/data.
+      3) Else try Google Drive shared folder (gdown) if GDRIVE_FOLDER_ID is set.
+      4) Else try ZIP_HTTP_URL (e.g., GitHub Release).
+      5) Else, if GCS_HTTP_PREFIX is set, just return an HTTP prefix for on-demand reads.
+    """
+    data_dir = pathlib.Path("/content") / DATA_FOLDER_NAME
+
+    # 1) already there?
+    if data_dir.exists() and any(data_dir.iterdir()):
+        print(f"Using existing data at {data_dir}")
+        return data_dir
+
+    # 3) try shared Google Drive folder via gdown
+    if GDRIVE_FOLDER_ID:
+        print("Downloading data from shared Google Drive folder...")
+        _download_with_gdown(GDRIVE_FOLDER_ID, str(data_dir))
+        if data_dir.exists() and any(data_dir.iterdir()):
+            print(f"Data ready at {data_dir}")
+            return data_dir
+
+    # 4) try a ZIP URL (e.g., GitHub Release)
+    if ZIP_HTTP_URL:
+        print("Downloading data zip...")
+        zip_path = pathlib.Path("/content") / ZIP_FILENAME
+        _download_zip(ZIP_HTTP_URL, str(zip_path), str(data_dir))
+        if data_dir.exists() and any(data_dir.iterdir()):
+            print(f"Data ready at {data_dir}")
+            return data_dir
+
+    # 5) if using GCS HTTP prefix, return a virtual path (you'll read via HTTP)
+    if GCS_HTTP_PREFIX:
+        print("No local data; you set GCS_HTTP_PREFIX, so read directly via HTTP/streaming.")
+        return pathlib.Path(GCS_HTTP_PREFIX)  # treat as a 'virtual' path
+
+    raise RuntimeError(
+        "Could not prepare data. Set one of: GDRIVE_FOLDER_ID, ZIP_HTTP_URL, or GCS_HTTP_PREFIX, "
+        "or place data in /content/data before calling get_data_dir()."
+    )
+
 def load_sorted_spikes(silent: bool = True) -> pd.DataFrame:
     """
     Load the sorted_spikes.parquet table, extracting/downloading as needed.
@@ -137,6 +191,7 @@ def load_sorted_spikes(silent: bool = True) -> pd.DataFrame:
     -------
     pd.DataFrame with at least the columns described at the top of this file.
     """
+    data_dir = get_data_dir()
     base = _detect_data_dir()
     parquet_path = _ensure_parquet(base)
     # Use pyarrow if available; fall back to pandas default
