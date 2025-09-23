@@ -504,7 +504,7 @@ def plot_templates_from_array(templates: np.ndarray, unit_ids=None, ax: Optional
 WORKSHOP_NAME = "data101-workshop"
 DATA_FOLDER_NAME = "data"               # where data will live locally
 GDRIVE_FOLDER_ID = ""  # Option A (leave "" to skip)
-ZIP_HTTP_URL = "https://github.com/mhburrell/Neuro101DD_Tutorial/releases/download/Data/Data.zip"  # e.g., a GitHub Release URL to a .zip file (Option B), or leave "" to skip
+ZIP_HTTP_URL = "https://github.com/mhburrell/Neuro101DD_Tutorial/releases/download/Week2/Data.zip"  # e.g., a GitHub Release URL to a .zip file (Option B), or leave "" to skip
 ZIP_FILENAME = "Data.zip"            # only used if ZIP_HTTP_URL is set
 GCS_HTTP_PREFIX = ""  # e.g., "https://storage.googleapis.com/your-bucket/workshop" (Option C), or leave "" to skip
 
