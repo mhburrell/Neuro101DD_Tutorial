@@ -73,18 +73,12 @@ def _detect_data_dir() -> Path:
 # Loading
 # -----------------------------------------------------------------------------
 
-def _download_zip(url: str, zip_path: Path) -> None:
-    """
-    Download a zip file to zip_path using curl (quiet).
-    """
-    import subprocess
-    zip_path.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["bash", "-lc", f'curl -L "{url}" -o "{zip_path}"'],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+def _download_zip(url, zip_path, extract_to):
+    os.makedirs(extract_to, exist_ok=True)
+    # Use curl if available (fewer issues than wget on some images)
+    subprocess.check_call(["bash", "-lc", f'curl -L "{url}" -o "{zip_path}"'])
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        zf.extractall(extract_to)
 
 def _ensure_parquet(data_dir: Path) -> Path:
     """
@@ -156,14 +150,6 @@ def get_data_dir():
         print(f"Using existing data at {data_dir}")
         return data_dir
 
-    # 3) try shared Google Drive folder via gdown
-    if GDRIVE_FOLDER_ID:
-        print("Downloading data from shared Google Drive folder...")
-        _download_with_gdown(GDRIVE_FOLDER_ID, str(data_dir))
-        if data_dir.exists() and any(data_dir.iterdir()):
-            print(f"Data ready at {data_dir}")
-            return data_dir
-
     # 4) try a ZIP URL (e.g., GitHub Release)
     if ZIP_HTTP_URL:
         print("Downloading data zip...")
@@ -173,10 +159,6 @@ def get_data_dir():
             print(f"Data ready at {data_dir}")
             return data_dir
 
-    # 5) if using GCS HTTP prefix, return a virtual path (you'll read via HTTP)
-    if GCS_HTTP_PREFIX:
-        print("No local data; you set GCS_HTTP_PREFIX, so read directly via HTTP/streaming.")
-        return pathlib.Path(GCS_HTTP_PREFIX)  # treat as a 'virtual' path
 
     raise RuntimeError(
         "Could not prepare data. Set one of: GDRIVE_FOLDER_ID, ZIP_HTTP_URL, or GCS_HTTP_PREFIX, "
