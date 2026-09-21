@@ -1,3 +1,25 @@
+# ---------------------------------------------------------------------------
+# NumPy 2 compatibility, applied before anything imports tridesclous.
+#
+# tridesclous 1.6.9 was written against NumPy 1 and calls np.in1d, which NumPy
+# 2.0 removed in favor of np.isin. Without this, run_sorting() dies with
+# "module 'numpy' has no attribute 'in1d'". Pinning an old NumPy instead would
+# force a Colab runtime restart, so we restore the removed aliases. Each line
+# is a no-op on a NumPy that still has the name.
+# ---------------------------------------------------------------------------
+import numpy as _np
+for _old, _new in [("in1d", "isin"), ("alltrue", "all"), ("sometrue", "any"),
+                   ("row_stack", "vstack"), ("trapz", "trapezoid")]:
+    if not hasattr(_np, _old) and hasattr(_np, _new):
+        setattr(_np, _old, getattr(_np, _new))
+for _old, _new in [("float_", "float64"), ("int_", "int64"), ("bool8", "bool_"),
+                   ("unicode_", "str_"), ("NaN", "nan"), ("Inf", "inf"), ("infty", "inf")]:
+    if not hasattr(_np, _old) and hasattr(_np, _new):
+        try:
+            setattr(_np, _old, getattr(_np, _new))
+        except Exception:
+            pass
+
 import os, math, numpy as np, pandas as pd
 import spikeinterface as si
 import spikeinterface.preprocessing as sp
@@ -613,14 +635,33 @@ import spikeinterface as si  # assuming this is the `si` you're using
 from pathlib import Path
 
 def load_recording(num):
+    """Load one recording by number.
 
+    Two changes for 2026. The count is no longer hard-coded: 2025 shipped seven
+    recordings, 2026 ships ten, so the bound is discovered from what is on disk
+    rather than written in. And the layout is looked up both ways -- the 2025
+    zip carried a "Data" folder inside the data directory, the 2026 zips put the
+    recordings at the top level -- so the same function serves either.
+    """
+    data_dir = pathlib.Path(get_data_dir())
+    if num < 1:
+        raise ValueError(f"recording numbers start at 1, got {num}")
 
-    data_dir = get_data_dir()
-    if not (1 <= num <= 7):
-        raise ValueError("num must be between 1 and 7")
+    for candidate in (data_dir / f"recording{num}", data_dir / "Data" / f"recording{num}"):
+        if candidate.exists():
+            return si.read_binary_folder(str(candidate))
 
-    rec_path = os.path.join(data_dir, "Data", f"recording{num}")
-    return si.read_binary_folder(rec_path)
+    available = sorted(
+        int(p.name[len("recording"):])
+        for base in (data_dir, data_dir / "Data") if base.exists()
+        for p in base.glob("recording*")
+        if p.is_dir() and p.name[len("recording"):].isdigit()
+    )
+    raise ValueError(
+        f"No recording{num} under {data_dir}. "
+        + (f"Available: {available}." if available else "No recordings found at all -- "
+           "run the data cell first.")
+    )
 
 def plot_trial(recording_number,trial_num=1):
   recording = load_recording(recording_number)

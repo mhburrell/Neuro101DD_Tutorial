@@ -1,0 +1,30 @@
+# This repository is public: the notebooks and helper modules students run are
+# here, and nothing else should be.
+#
+# Everything below either gives the exercise away or is a marking key. Keep it
+# in the Dropbox teaching folder, not here.
+
+n101dd_simulate.py
+answer_key.py
+build_question_bank.py
+make_one.py
+codes.py
+*_truth.json
+manifest.json
+answerkey_*.md
+student_codes.csv
+code_mailmerge.csv
+dataanalysis_questions*.csv
+*InstructorTest*.ipynb
+marking/
+truth/
+
+# Generated data and local working files
+*.zip
+data/
+sorted_spikes.parquet
+dataset_id.txt
+_sort_rec*/
+selftest_*/
+__pycache__/
+.ipynb_checkpoints/
