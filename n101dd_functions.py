@@ -526,7 +526,14 @@ def plot_templates_from_array(templates: np.ndarray, unit_ids=None, ax: Optional
 WORKSHOP_NAME = "data101-workshop"
 DATA_FOLDER_NAME = "data"               # where data will live locally
 GDRIVE_FOLDER_ID = ""  # Option A (leave "" to skip)
-ZIP_HTTP_URL = "https://github.com/mhburrell/Neuro101DD_Tutorial/releases/download/Week2/Data.zip"  # e.g., a GitHub Release URL to a .zip file (Option B), or leave "" to skip
+ZIP_HTTP_URL = ""  # deliberately empty -- see below.
+# This used to point at the 2025 release (Week2/Data.zip). In 2026 every
+# student has their own ten recordings, fetched by the notebook's own download
+# cell using their code. With a URL here, get_data_dir() treats an empty
+# /content/data as "nothing downloaded yet" and quietly fetches that zip
+# instead -- so a student whose download cell had not run would analyse last
+# year's seven shared recordings, with no error and no way to tell from the
+# output. Empty means the loader raises instead, which is the right failure.
 ZIP_FILENAME = "Data.zip"            # only used if ZIP_HTTP_URL is set
 GCS_HTTP_PREFIX = ""  # e.g., "https://storage.googleapis.com/your-bucket/workshop" (Option C), or leave "" to skip
 
