@@ -670,9 +670,12 @@ def load_recording(num):
            "run the data cell first.")
     )
 
-def plot_trial(recording_number,trial_num=1):
+def plot_trial(recording_number, trial_num=1, start_time=None, end_time=None):
+  """Plot one trial. start_time and end_time (seconds from the start of the trial)
+  zoom in on part of it, e.g. plot_trial(1, 5, start_time=2.9, end_time=3.0)."""
   recording = load_recording(recording_number)
-  plot_segment(recording,segment_index = trial_num)
+  plot_segment(recording, segment_index=trial_num,
+               start_time=start_time, end_time=end_time)
 
 def plot_all_trials(recording_number):
   recording = load_recording(recording_number)
